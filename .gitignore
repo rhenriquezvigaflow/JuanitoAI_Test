@@ -1,0 +1,30 @@
+# Dependencias y entornos locales
+.tools/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+node_modules/
+
+# Credenciales y configuración privada
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Extracciones y resultados locales de auditoría
+analisis_tender/*.txt
+analisis_tender/verificacion_codigo.json
+analisis_tender/fixture_costeo_*/
+
+# Datos operacionales y documentos de clientes
+workspace/
+documents/
+uploads/
+logs/
+
+# Archivos temporales
+.DS_Store
+Thumbs.db
+~$*
