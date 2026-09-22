@@ -1,6 +1,8 @@
 # GOLDEN-001 — Matriz de validación
 
 > Matriz inicial basada en el expediente real revisado. Los valores sensibles o que identifiquen directamente al cliente no se versionan en este repositorio público. Los localizadores exactos del caso real se mantienen en el almacenamiento privado del piloto.
+>
+> **Estado de esta revisión:** evaluación experta simulada para construir el piloto. Sirve como ground truth provisional de desarrollo, pero no reemplaza la aprobación de un especialista responsable de Proceso/Ingeniería/Costos.
 
 ## Estados permitidos
 
@@ -16,30 +18,30 @@
 
 `evidencia_no_encontrada` nunca equivale por sí sola a incumplimiento.
 
-## Matriz inicial
+## Decisión experta simulada
 
-| ID | Control | Fuente A | Fuente B | Tipo | Resultado inicial | Revisión humana |
-| --- | --- | --- | --- | --- | --- | --- |
-| C01 | Caudal de alimentación del proceso vs simulación | PFD | Simulación | Determinístico | Esperado consistente | Confirmar vigencia de ambas revisiones |
-| C02 | Caudal de producto vs simulación | PFD | Simulación | Determinístico | Esperado consistente | Confirmar unidad y escenario |
-| C03 | Caudal de rechazo vs simulación | PFD | Simulación | Determinístico | Esperado consistente | Confirmar unidad y escenario |
-| C04 | Cantidad de filtros de pretratamiento | PFD | Costeo | Extracción visual + regla | Esperado consistente | Confirmar cómo interpretar equipos agrupados |
-| C05 | Tipo/tamaño de filtros de pretratamiento | PFD | Costeo | Matching + regla | Esperado consistente | Confirmar equivalencia de nomenclaturas |
-| C06 | Cantidad de elementos de membrana | Simulación | Costeo | Determinístico | Esperado consistente | Confirmar revisión vigente |
-| C07 | Modelo de membrana | Simulación | Costeo | Determinístico | Esperado consistente | Confirmar equivalencias de nombre/modelo |
-| C08 | Cantidad de portamembranas / pressure vessels | Simulación | Costeo | Determinístico | Esperado consistente | Confirmar terminología usada por ingeniería |
-| C09 | Centros de costo de suministro | Costeo | APU | Determinístico | Parcialmente consistente | Revisar partidas especiales y exclusiones |
-| C10 | Integridad de referencias entre hojas | APU | APU | Determinístico | Discrepancia comprobada en al menos una referencia | Confirmar si es error del libro o plantilla en construcción |
-| C11 | Fórmulas con referencias inválidas | Costeo/APU | — | Determinístico | Debe reportarse sin inferir costo incorrecto automáticamente | Validar severidad |
-| C12 | Nombres definidos con referencia inválida | Costeo | — | Determinístico | Debe reportarse como riesgo de integridad | Validar si afecta cálculo vigente |
-| C13 | Fórmula con valor almacenado pero dependencias dañadas | Costeo | — | Determinístico | `informacion_insuficiente` o `discrepancia_probable` | Especialista decide impacto |
-| C14 | Ajustes hardcodeados en total APU | APU | Costeo | Determinístico | Requiere explicación | Confirmar si es ajuste autorizado |
-| C15 | Partidas duplicadas o con valor reutilizado | APU | Costeo | Regla + revisión | `discrepancia_probable` | Confirmar intención comercial |
-| C16 | Referencia a fuente externa no incluida | Costeo | Fuente externa | Determinístico | `evidencia_no_encontrada` | Solicitar respaldo si aplica |
-| C17 | Descripción/resumen de simulación vs resultados calculados | Simulación | Simulación | Determinístico | Posible discrepancia de metadatos | Confirmar escenario vigente |
-| C18 | Alternativas de producto químico | Proyección química A | Proyección química B | Clasificación contextual | No deben sumarse ni tratarse como contradicción automática | Definir alternativa seleccionada |
-| C19 | Dosis química vs costeo | Proyección química | Costeo | Regla + contexto | `informacion_insuficiente` mientras no se conozca producto seleccionado | Revisión técnica obligatoria |
-| C20 | Documentos ilegibles o sin texto extraíble | PDF visual | — | Cobertura | `documento_ilegible_o_parcial` solo si falla la ruta visual/OCR | No convertir ausencia de texto en archivo vacío |
+| ID | Control | Fuente A | Fuente B | Tipo | Decisión provisional | Severidad | Acción |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C01 | Caudal de alimentación del proceso vs simulación | PFD | Simulación | Determinístico | `consistente` | baja | Usar como caso positivo del golden set |
+| C02 | Caudal de producto vs simulación | PFD | Simulación | Determinístico | `consistente` | baja | Usar como caso positivo del golden set |
+| C03 | Caudal de rechazo vs simulación | PFD | Simulación | Determinístico | `consistente` | baja | Usar como caso positivo del golden set |
+| C04 | Cantidad de filtros de pretratamiento | PFD | Costeo | Extracción visual + regla | `consistente` | baja | Validar por objetos/regiones, no por conteo de texto |
+| C05 | Tipo/tamaño de filtros de pretratamiento | PFD | Costeo | Matching + regla | `consistente` | baja | Crear alias controlado de nomenclatura |
+| C06 | Cantidad de elementos de membrana | Simulación | Costeo | Determinístico | `consistente` | baja | Usar como caso positivo del golden set |
+| C07 | Modelo de membrana | Simulación | Costeo | Determinístico | `consistente` usando el detalle calculado | baja | El conflicto de metadatos se gestiona en C17 |
+| C08 | Cantidad de portamembranas / pressure vessels | Simulación | Costeo | Determinístico | `consistente` | baja | Registrar equivalencia terminológica aprobada |
+| C09 | Cobertura y valores de centros de costo de suministro | Costeo | APU | Determinístico | `discrepancia_comprobada` a nivel de partida; el total agregado puede reconciliarse por un ajuste | alta | No aceptar conciliación solo porque el total final coincida |
+| C10 | Integridad de referencias entre hojas del resumen APU | APU | APU | Determinístico | `discrepancia_comprobada` | crítica | Bloquear uso del resumen como salida final hasta corregir referencias |
+| C11 | Fórmulas con referencias inválidas en el APU | APU | — | Determinístico | `discrepancia_comprobada` | crítica | Reportar causa raíz y dependencias; no reparar automáticamente |
+| C12 | Nombres definidos con referencias inválidas en el costeo | Costeo | — | Determinístico | `discrepancia_probable` | media | Existen nombres globales inválidos y nombres locales utilizables; medir impacto antes de declarar costos incorrectos |
+| C13 | Fórmula con valor almacenado y dependencia potencialmente dañada | Costeo | — | Determinístico | `informacion_insuficiente` | media | Verificar en Excel o motor compatible qué nombre/ámbito resuelve realmente la fórmula |
+| C14 | Ajuste manual numérico dentro del total APU | APU | Costeo | Determinístico | `discrepancia_comprobada` de trazabilidad | alta | Exigir justificación y autorización; puede transformarse en `excepcion_justificada` solo con respaldo |
+| C15 | Partida de suministro con valor reutilizado/duplicado frente al costeo | APU | Costeo | Determinístico + revisión | `discrepancia_comprobada` | alta | Corregir partida o documentar excepción; relacionar con C14 |
+| C16 | Referencia a fuente externa no incluida | Costeo | Fuente externa | Determinístico | `no_aplica` al GOLDEN-001 actual | — | La inspección actual no confirma este caso; conservar la regla genérica para otros expedientes |
+| C17 | Metadatos de revisión de simulación vs resultados calculados del mismo informe | Simulación | Simulación | Determinístico | `discrepancia_comprobada` | alta | Confirmar cuál escenario/revisión es canónico antes de usar la simulación como fuente oficial |
+| C18 | Dos alternativas de producto químico | Proyección química A | Proyección química B | Clasificación contextual | `no_aplica` como discrepancia | — | Mantener escenarios separados; no sumarlos ni tratarlos como contradicción |
+| C19 | Dosis química vs costeo | Proyección química | Costeo | Regla + contexto | `informacion_insuficiente` | alta | Falta confirmar producto seleccionado, base de dosis y período operativo del costeo |
+| C20 | PDF sin texto extraíble pero legible visualmente | PDF visual | — | Cobertura | `no_aplica` como hallazgo | — | Registrar `visual_required` en cobertura; solo usar `documento_ilegible_o_parcial` si falla también la ruta visual/OCR |
 
 ## Evidencia mínima requerida
 
@@ -73,6 +75,20 @@
 - valor;
 - fecha de ejecución si existe.
 
+## Tolerancias propuestas para el piloto
+
+Estas tolerancias son de trabajo y deben ser aprobadas por los especialistas antes de transformarse en reglas corporativas.
+
+| Familia | Tolerancia propuesta |
+| --- | --- |
+| Cantidades discretas de equipos | Igualdad exacta después de resolver alcance, reserva y suministro del cliente |
+| Caudales | ±0,1 m³/h o ±0,5 %, el mayor de ambos, después de normalizar unidades |
+| Modelo/código de equipo | Igualdad del identificador canónico; alias solo mediante catálogo aprobado |
+| Totales monetarios | Misma moneda y base; tolerancia de redondeo ±1 unidad monetaria o ±0,1 %, el mayor de ambos |
+| Referencias Excel usadas en salidas finales | Tolerancia cero para `#REF!`, referencia inexistente o fórmula que apunte a una celda vacía cuando existe un total oficial en otra ubicación |
+| Revisión/escenario | Debe existir relación explícita con la revisión oficial; conflictos de metadatos requieren revisión humana |
+| Químicos | No comparar dosis hasta igualar producto, concentración, base de dosificación, horas/día, días considerados y escenario |
+
 ## Reglas de decisión
 
 1. Los controles aritméticos, referencias, cantidades y unidades se ejecutan en código.
@@ -80,3 +96,5 @@
 3. Una excepción solo queda cerrada cuando un revisor autorizado la acepta.
 4. Cada hallazgo debe conservar la versión de documento, regla, extractor y evaluación que lo originó.
 5. Una corrección genera una nueva evaluación; no se sobrescribe el resultado aprobado anterior.
+6. Coincidencia de un total agregado no anula una discrepancia de partida ni un ajuste manual no explicado.
+7. Cobertura documental se registra aparte del estado del hallazgo; un PDF visual sin capa de texto no es automáticamente ilegible.
