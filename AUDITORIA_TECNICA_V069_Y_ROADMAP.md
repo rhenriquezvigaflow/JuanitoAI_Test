@@ -1,6 +1,6 @@
 # Auditoría técnica de ECO v0.6.9 y roadmap del nuevo requerimiento
 
-Revisión: 22 de septiembre de 2026. Fuente: `C:/Users/MarcoEspinoza/Downloads/eco-propuestas-ai-v0.6.9/eco-propuestas-ai-v0.6.9`.
+Revisión: 22 de septiembre de 2026. Fuente: copia local autorizada de `eco-propuestas-ai-v0.6.9`, mantenida fuera de este repositorio.
 
 Actualización de alcance: las decisiones propuestas tras la aclaración del solicitante están en [ARQUITECTURA_OBJETIVO.md](ARQUITECTURA_OBJETIVO.md). El piloto de planos prioriza PDF multimodal directo y costeo; la integración CAD no es prerrequisito. La carga manual es entrada inicial y SharePoint queda como fuente complementaria. LibreChat es candidato para el chat, no una integración ya implementada. Las estimaciones de este documento deben rebasarse al cerrar esa integración y el alcance de SSO.
 
@@ -20,9 +20,9 @@ No basta modificar los prompts. Tampoco es necesario sustituir todo el producto 
 - Se ejecutaron dos funciones reales de ingesta, extraídas del código por AST, contra un Excel sintético: se reprodujeron pérdida de un cero, ausencia del resultado de una fórmula sin valor cacheado y falta de localizador de fila.
 - No se arrancó la aplicación completa, no se usaron credenciales ni modelos, no se procesaron expedientes reales y no se midieron carga, precisión o tiempos operacionales.
 - No se encontraron suites de pruebas en el paquete entregado. La documentación menciona scripts y laboratorios que no están incluidos; esto no demuestra que el autor no tenga pruebas en su repositorio completo.
-- No se modificó el código entregado. Los scripts y resultados de revisión quedan en este workspace.
+- No se modificó el código entregado. Los scripts y resultados auxiliares de revisión se retiraron posteriormente por solicitud del usuario.
 
-Reproducción: `python analisis_tender/verificar_codigo.py --source /ruta/eco-propuestas-ai-v0.6.9`. Evidencia local generada: `analisis_tender/verificacion_codigo.json`, con SHA-256 del executor inspeccionado y versión de openpyxl usada para la prueba; este resultado no se versiona.
+Las verificaciones describen lo ejecutado durante la auditoría original. Los utilitarios auxiliares se retiraron del estado actual del repositorio; no se ofrece aquí un comando de reproducción vigente.
 
 ## 2. Arquitectura confirmada en código
 
