@@ -1,207 +1,224 @@
 # GOLDEN-001 — Resultados esperados
 
-> Documento de trabajo para construir el ground truth con especialistas. Este archivo no contiene nombres de cliente, precios ni documentos originales porque el repositorio es público.
+> Ground truth provisional elaborado mediante revisión experta simulada del expediente. Sirve para desarrollo y pruebas iniciales. Antes de declararlo criterio corporativo debe ser ratificado por especialistas responsables de Proceso/Ingeniería/Costos.
+>
+> Este archivo no contiene nombres de cliente, precios sensibles ni documentos originales porque el repositorio es público.
 
 ## Objetivo
 
-Definir qué debe detectar JuanAI en el primer expediente antes de implementar el MVP completo. El objetivo del spike es validar extracción, normalización, conciliación, reglas determinísticas y trazabilidad de evidencia.
+Definir qué debe detectar JuanAI en el primer expediente antes de implementar el MVP completo. El spike debe validar extracción, normalización, conciliación, reglas determinísticas, cobertura y trazabilidad de evidencia.
 
-## Resultados confirmados por inspección técnica
+## Resultados esperados aprobados provisionalmente
 
-### ER-01 — Consistencia de caudales entre diseño y simulación
+### ER-01 — Caudales de diseño y simulación
 
-El PFD y la corrida de membranas contienen valores de alimentación, producto y rechazo que pueden compararse de manera determinística.
+**Decisión:** `consistente`.
 
-Resultado esperado del sistema:
+JuanAI debe verificar alimentación, producto y rechazo después de normalizar unidades y escenario. La igualdad numérica se decide en código.
 
-```json
-{
-  "status": "consistente",
-  "control": "process_flow_consistency",
-  "evidence": [
-    {"source": "DOC-PFD-001", "locator": "pagina/region"},
-    {"source": "DOC-SIM-001", "locator": "pagina/parametro"}
-  ]
-}
-```
+Esperado:
 
-La regla debe comparar valores después de normalizar unidad y escenario. No requiere LLM para decidir la igualdad numérica.
+- alimentación: consistente;
+- producto: consistente;
+- rechazo: consistente;
+- evidencia del PFD y de la simulación asociada al mismo finding.
 
-### ER-02 — Membranas: cantidad y modelo
+### ER-02 — Filtros de pretratamiento
 
-La simulación y el costeo contienen cantidad total y modelo de membranas que pueden conciliarse.
+**Decisión:** `consistente`.
 
-Resultado esperado:
+JuanAI debe reconocer cuatro equipos de pretratamiento equivalentes entre el PFD y el costeo, incluyendo tipo/tamaño cuando la extracción tenga cobertura suficiente.
 
-- extraer modelo normalizado;
-- extraer cantidad;
-- asociar ambas evidencias;
-- reportar `consistente` cuando coinciden;
-- reportar `discrepancia_comprobada` solo cuando ambas fuentes son legibles, vigentes y comparables y los valores difieren fuera de tolerancia.
+Regla importante: no contar equipos únicamente por apariciones de palabras; usar agrupación visual/geométrica del plano.
 
-### ER-03 — Portamembranas / pressure vessels
+### ER-03 — Membranas: cantidad y modelo
 
-La simulación informa cantidad de cajas de presión y el costeo contiene la partida equivalente.
+**Decisión:** `consistente` usando el bloque de resultados calculados de la simulación.
 
-Resultado esperado:
+JuanAI debe conciliar:
 
-- reconocer la equivalencia semántica `pressure vessel` / `portamembrana` mediante catálogo o matching controlado;
-- realizar la comparación de cantidad en código;
-- conservar evidencia de ambos lados.
+- cantidad total de elementos;
+- modelo canónico de membrana;
+- revisión/escenario usado como fuente.
 
-### ER-04 — Filtros de pretratamiento
+Si el encabezado narrativo de una revisión contradice el bloque calculado, ese conflicto debe registrarse por separado como ER-10 y no degradar silenciosamente este control.
 
-El PFD representa equipos de pretratamiento y el costeo incluye la partida correspondiente.
+### ER-04 — Portamembranas / pressure vessels
 
-Resultado esperado:
+**Decisión:** `consistente`.
 
-- no contar equipos únicamente por número de apariciones del texto;
-- utilizar estructura visual/regiones cuando el PFD repita rótulos;
-- comparar cantidad, tipo y tamaño cuando exista evidencia suficiente.
+JuanAI debe reconocer `pressure vessel`, `caja de presión` y `portamembrana` como equivalencias controladas y comparar cantidades de forma determinística.
 
-### ER-05 — Referencia rota en APU
+### ER-05 — Conciliación Costeo ↔ APU por partidas
 
-El libro APU contiene al menos una referencia `#REF!` en su resumen económico.
+**Decisión:** `discrepancia_comprobada` en al menos una partida relevante.
 
-Resultado esperado:
+El sistema no debe validar el APU solamente porque un total final parezca conciliable. Debe comparar cada centro de costo/partida y señalar diferencias antes de consolidar.
 
-```json
-{
-  "status": "discrepancia_comprobada",
-  "control": "excel_broken_reference",
-  "severity": "high",
-  "evidence": {
-    "source": "DOC-APU-001",
-    "locator": "hoja/celda",
-    "formula": "formula_original"
-  }
-}
-```
+Esperado:
 
-El sistema debe indicar la celda y fórmula afectada. No debe intentar reparar automáticamente la fórmula durante el análisis.
+- mostrar valor de Costeo;
+- mostrar valor de APU;
+- mostrar diferencia absoluta y porcentual;
+- relacionar cualquier ajuste manual que compense la diferencia;
+- requerir revisión humana si el ajuste no posee justificación trazable.
 
-### ER-06 — Propagación de error desde una referencia rota
+### ER-06 — Resumen económico APU con referencias rotas
 
-Si una celda con `#REF!` alimenta un subtotal, IVA o total, JuanAI debe registrar la cadena de dependencias afectadas.
+**Decisión:** `discrepancia_comprobada`.
 
-Resultado esperado:
+El resumen contiene una referencia `#REF!` y referencias a posiciones que no contienen los totales esperados.
 
-- identificar la causa raíz;
-- distinguir causa de celdas derivadas afectadas;
-- evitar generar múltiples hallazgos independientes cuando todos provienen del mismo error raíz, salvo que negocio defina lo contrario.
+JuanAI debe:
 
-### ER-07 — Nombres definidos dañados en el costeo
+- identificar celda y fórmula;
+- mostrar la hoja objetivo;
+- distinguir referencia inexistente de referencia válida a celda vacía/equivocada;
+- marcar los totales derivados afectados;
+- agrupar efectos que compartan una misma causa raíz.
 
-El libro de costeo contiene nombres definidos a nivel de libro cuya fórmula apunta a `#REF!`, mientras existen definiciones locales válidas para algunos nombres.
+Severidad provisional: `critica` cuando la referencia rota alimenta el total contractual.
 
-Resultado esperado:
+### ER-07 — Referencias Excel y nombres definidos dañados
 
-- inventariar nombre, ámbito y referencia;
-- reportar riesgo de integridad;
-- determinar si la fórmula que se evalúa resuelve contra el ámbito local o depende del nombre inválido;
-- no declarar automáticamente que todos los costos están incorrectos.
+**Decisión:**
 
-Estado inicial recomendado:
+- referencias rotas del APU: `discrepancia_comprobada`;
+- nombres definidos globales inválidos del costeo: `discrepancia_probable` hasta medir impacto.
 
-`discrepancia_probable` o `informacion_insuficiente` hasta analizar impacto real.
+El costeo contiene nombres globales con referencias inválidas y nombres locales con referencias utilizables. JuanAI debe conservar nombre, ámbito y fórmula y determinar qué definición resuelve una fórmula concreta antes de afirmar que el cálculo económico está incorrecto.
 
-### ER-08 — Ajuste hardcodeado en total APU
+### ER-08 — Fórmula con valor almacenado y dependencias dudosas
 
-El total de suministro contiene un ajuste numérico explícito dentro de la fórmula.
+**Decisión:** `informacion_insuficiente`.
 
-Resultado esperado:
+Si existe un resultado almacenado pero la dependencia que originó el cálculo está dañada o es ambigua, JuanAI puede mostrar el valor cacheado como evidencia histórica, pero no debe presentarlo como cálculo reproducido.
 
-- detectar el literal dentro de una fórmula de total;
-- mostrar fórmula y celda;
-- relacionarlo con partidas potencialmente involucradas;
-- generar pregunta al especialista.
-
-Estado inicial:
-
-`informacion_insuficiente`.
-
-Pregunta propuesta:
-
-> ¿El ajuste manual incorporado al total de suministro corresponde a una corrección comercial aprobada? Indicar motivo y fuente de autorización.
-
-### ER-09 — Partidas potencialmente inconsistentes entre costeo y APU
-
-Existen partidas del APU cuyo valor requiere conciliación contra el resumen del costeo y cuya interpretación no debe cerrarse automáticamente.
-
-Resultado esperado:
-
-- detectar diferencia cuantitativa;
-- presentar ambas fuentes;
-- indicar si existe un ajuste en el total que podría compensar la diferencia;
-- clasificar como `discrepancia_probable`, nunca como error definitivo sin revisión.
-
-### ER-10 — Referencia externa ausente
-
-Si una fórmula depende de otro libro/archivo que no está dentro del expediente, JuanAI debe registrar la ausencia de respaldo.
-
-Resultado esperado:
+Esperado:
 
 ```json
 {
-  "status": "evidencia_no_encontrada",
-  "control": "external_reference_missing",
-  "action": "solicitar_fuente"
+  "status": "informacion_insuficiente",
+  "calculation_reproduced": false,
+  "stored_value_available": true,
+  "requires_human_review": true
 }
 ```
 
-La ausencia del archivo externo no demuestra que el valor sea incorrecto.
+### ER-09 — Ajuste manual en total APU
+
+**Decisión:** `discrepancia_comprobada` de trazabilidad.
+
+El APU contiene un ajuste numérico explícito dentro de una fórmula de total.
+
+JuanAI debe:
+
+- detectar el literal;
+- identificar la fórmula y celda;
+- vincularlo a las partidas potencialmente compensadas;
+- preguntar por la autorización del ajuste.
+
+No debe eliminarlo ni corregirlo automáticamente.
+
+Puede transformarse posteriormente en `excepcion_justificada` solo cuando exista respaldo aprobado.
+
+### ER-10 — Conflicto de metadatos en la simulación
+
+**Decisión:** `discrepancia_comprobada`.
+
+La descripción de la revisión contiene parámetros de escenario distintos a los resultados calculados del mismo informe. JuanAI debe mantener separados:
+
+- texto/metadata de revisión;
+- resultados calculados;
+- diagrama y corrientes del informe.
+
+No debe escoger automáticamente uno como verdadero. Debe generar una pregunta para identificar cuál escenario es el vigente/canónico.
+
+Severidad provisional: `alta` porque afecta el uso de la simulación como fuente de diseño.
 
 ### ER-11 — PDFs visuales sin texto extraíble
 
-Las proyecciones químicas pueden no disponer de texto parseable.
+**Decisión:** no es un hallazgo por sí mismo.
 
-Resultado esperado:
+Los documentos químicos pueden requerir procesamiento visual. El sistema debe registrar cobertura, por ejemplo:
 
-- detectar que la extracción textual es insuficiente;
-- ejecutar ruta visual/OCR cuando esté habilitada;
-- conservar evidencia de página/región;
-- no marcar el archivo como vacío solo porque el extractor textual devuelve cero contenido.
+```json
+{
+  "text_layer_available": false,
+  "visual_processing_required": true,
+  "document_status": "processable_visual"
+}
+```
+
+Solo usar `documento_ilegible_o_parcial` cuando falle también la ruta visual/OCR o la evidencia obtenida sea insuficiente.
 
 ### ER-12 — Alternativas químicas
 
-Dos proyecciones químicas diferentes representan alternativas y no necesariamente una contradicción.
+**Decisión:** `no_aplica` como discrepancia entre alternativas.
 
-Resultado esperado:
+Las dos proyecciones representan productos distintos. JuanAI debe mantenerlas como escenarios independientes y nunca sumar las dosis ni convertir una alternativa en regla universal.
 
-- mantener cada alternativa como escenario separado;
-- no sumar sus dosis;
-- no transformar ninguna alternativa en regla universal;
-- solicitar selección/confirmación cuando el costeo no permita identificar inequívocamente el producto elegido.
+### ER-13 — Proyección química vs costeo
 
-## Casos que requieren validación del especialista
+**Decisión:** `informacion_insuficiente` hasta confirmar selección y base de cálculo.
 
-Antes de cerrar GOLDEN-001, un especialista debe confirmar para cada control:
+Antes de comparar dosis, JuanAI debe resolver:
 
-| Campo | Valores permitidos |
-| --- | --- |
-| Decisión | confirmar / corregir / descartar / excepción / no aplica |
-| Severidad | crítica / alta / media / baja |
-| Comparabilidad | sí / no / condicionada |
-| Revisión vigente | identificador de revisión |
-| Comentario | explicación técnica o comercial |
-| Evidencia adicional | referencia al almacenamiento privado |
+- producto seleccionado;
+- concentración del producto;
+- unidad/base de dosis;
+- caudal asociado;
+- horas de operación por día;
+- días de operación incluidos en el costeo;
+- si el costeo incluye uno o varios meses.
 
-## Criterio de cierre del ground truth
+Sin esos datos, cualquier diferencia se convierte en pregunta, no en incumplimiento.
 
-GOLDEN-001 se considera listo para implementar cuando:
+### ER-14 — Referencia externa faltante
 
-- [ ] C01–C10 tienen decisión del especialista;
-- [ ] las discrepancias conocidas están identificadas;
-- [ ] se definió qué casos son correctos para medir falsos positivos;
-- [ ] las excepciones tienen justificación explícita;
-- [ ] se acordaron tolerancias de cantidad/unidad cuando correspondan;
-- [ ] cada resultado esperado tiene evidencia verificable;
-- [ ] quedó definida la regla de decisión para ausencia de evidencia;
-- [ ] los datos sensibles continúan fuera de Git.
+**Decisión para este expediente:** `no_aplica`.
+
+La revisión actual no confirmó con evidencia suficiente una referencia externa faltante que deba formar parte del ground truth de GOLDEN-001. La regla genérica `external_reference_missing` se mantiene en el catálogo de JuanAI para otros expedientes, pero no debe considerarse un error conocido de este caso.
+
+## Casos positivos que el sistema debe preservar
+
+GOLDEN-001 debe contener controles correctos para medir falsos positivos. Como mínimo:
+
+- caudal de alimentación;
+- caudal de producto;
+- caudal de rechazo;
+- cantidad de filtros de pretratamiento;
+- tipo/tamaño de filtros;
+- cantidad de membranas;
+- modelo de membrana en el bloque calculado;
+- cantidad de portamembranas.
+
+JuanAI falla el golden set si transforma estos casos correctos en discrepancias sin evidencia adicional.
+
+## Casos negativos conocidos del expediente
+
+Como mínimo:
+
+- referencia rota en resumen APU;
+- referencias del resumen que no apuntan al total efectivo esperado;
+- propagación del error a total/IVA cuando corresponda;
+- discrepancia de al menos una partida Costeo ↔ APU;
+- ajuste hardcodeado sin trazabilidad explícita;
+- conflicto de metadatos vs resultados calculados en la simulación;
+- nombres definidos inválidos que requieren análisis de impacto.
+
+## Reglas de aceptación provisional para SPIKE-001
+
+1. Todos los findings deben tener evidencia localizable.
+2. Los casos positivos definidos arriba deben resultar `consistente`.
+3. Los errores Excel conocidos deben ser detectados sin LLM.
+4. `evidencia_no_encontrada` e `informacion_insuficiente` no se convierten en incumplimiento.
+5. Los conflictos de revisión/escenario generan pregunta y revisión humana.
+6. Ningún ajuste económico manual queda aceptado automáticamente.
+7. Las fórmulas no se consideran recalculadas por el solo hecho de leerlas con una biblioteca de archivos.
+8. Los documentos visuales deben pasar por una ruta de cobertura visual antes de declararse ilegibles.
 
 ## Salida mínima del SPIKE-001
-
-El spike debe producir, como mínimo:
 
 ```text
 inventory.json
@@ -227,3 +244,17 @@ Cada `finding` debe incluir:
 - certeza cuando haya interpretación IA;
 - `requires_human_review`;
 - decisión del revisor cuando exista.
+
+## Estado del ground truth
+
+**Aprobado para desarrollo del spike:** sí, como ground truth provisional.
+
+**Aprobado como criterio corporativo definitivo:** no.
+
+Antes de promover estas reglas a producción, un especialista responsable debe ratificar especialmente:
+
+- C09 Costeo ↔ APU;
+- C12/C13 impacto real de nombres definidos del costeo;
+- C14/C15 explicación del ajuste y partidas asociadas;
+- C17 revisión oficial de la simulación;
+- C19 selección y cálculo de químicos.
