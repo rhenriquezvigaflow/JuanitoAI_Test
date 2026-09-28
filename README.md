@@ -1,104 +1,111 @@
 # JuanAI
 
-Plataforma para revisar muchas propuestas de ingeniería, detectar discrepancias entre propuesta, planos y costeo, y consultar resultados respaldados por evidencia.
+Plataforma para revisar propuestas de ingeniería, detectar discrepancias entre planos, simulaciones, costeos y antecedentes, y permitir consultas sobre resultados respaldados por evidencia.
 
 ## Estado
 
-Definición de arquitectura y roadmap. Todavía no hay una aplicación JuanAI implementada, conexión a SharePoint, SSO ni evaluaciones ejecutadas con modelos en este repositorio.
+El proyecto está en fase de arquitectura + GOLDEN-001 / SPIKE-001. Todavía no existe una aplicación MVP desplegada.
 
-## Arquitectura propuesta
+## Alcance del MVP
 
-Base seleccionada para implementar el MVP; todavía no desplegada:
+El flujo inicial será intencionalmente simple:
+
+1. Un **administrador** crea el expediente, carga los documentos y ejecuta el análisis.
+2. El procesamiento continúa en el servidor mediante workers.
+3. Los resultados quedan versionados y almacenados.
+4. Los **usuarios autorizados** pueden consultar resultados y evidencia.
+5. Los usuarios pueden realizar preguntas mediante un **chat contextual** del expediente.
+6. Solo el administrador puede validar/corregir hallazgos y volver a ejecutar el análisis.
+
+Los usuarios normales del MVP no cargan documentos ni ejecutan procesos.
+
+## Arquitectura objetivo
 
 ```mermaid
 flowchart TD
-    U[Usuarios corporativos] --> S[SSO Microsoft Entra ID / OIDC]
-    S --> UI[Portal JuanAI: carga, resultados y prompts]
-    UI --> API[Python / FastAPI: permisos por rol y expediente]
-    API --> DB[(PostgreSQL: casos, versiones y auditoría)]
-    API --> FS[Almacenamiento privado de archivos]
-    API --> Q[Celery + Redis: cola de trabajos]
-    Q --> W[Workers Python independientes del navegador]
-    W --> XL[Lectura de Excel y controles deterministas]
-    W --> LLM[API OpenAI: PDF visual y análisis]
-    W --> RAG[Servicio compartido RAG / LangChain]
-    RAG --> V[(pgvector + búsqueda textual en PostgreSQL)]
-    W --> DB
-    UI --> CHAT[LibreChat: preguntas sobre resultados]
-    S --> CHAT
-    CHAT --> API
-    CHAT --> M[(MongoDB: datos propios del chat)]
-    API --> RAG
+    A[Administrador] --> UI[React + TypeScript]
+    U[Usuarios autorizados] --> UI
+    UI --> API[FastAPI]
+    API --> DB[(PostgreSQL + pgvector)]
+    API --> FS[Storage privado]
+    API --> Q[Celery + Redis]
+    Q --> W[Workers Python]
+    W --> DOC[PDF / Excel / DOCX / OCR]
+    W --> RULES[Reglas determinísticas]
+    W --> AI[AI Provider Service]
+    AI --> MODEL[Proveedor/modelo autorizado]
+    W --> RAG[RAG + búsqueda híbrida]
+    RAG --> DB
+    API --> CHAT[Chat contextual]
+    CHAT --> RAG
 ```
 
-SSO autentica la cuenta corporativa; FastAPI autoriza cada expediente, documento, descarga y consulta RAG. El tenant y registro de aplicaciones se configuran con TI. Los permisos del chat deben corresponder con los del backend.
+## Stack
 
-- Python/FastAPI para la aplicación y el servicio de evaluación.
-- PostgreSQL y pgvector para datos y recuperación documental, con búsqueda textual complementaria.
-- Celery + Redis para procesamiento en workers; PostgreSQL conserva el estado durable de trabajos y resultados. Implementar persistencia, checkpoints, reconciliación y reintentos idempotentes: la cola por sí sola no garantiza recuperación.
-- API OpenAI para revisión documental y visual de PDF; cálculos de costeo verificables en código.
-- SSO corporativo, roles, auditoría y resultados versionados.
-- Prompts editables y conocimiento aprobado antes de reutilizar aprendizajes.
-- LibreChat como interfaz de conversación conectada al mismo servicio de conocimiento; MongoDB para sus datos propios.
-- LangChain limitado a integración/recuperación RAG; no se requiere migrar el motor completo ni incorporar LangGraph.
-- Portal HTML/CSS/JavaScript modular reutilizando componentes del visor ECO y despliegue inicial con Docker Compose en servidor autorizado.
+- **Frontend:** React + TypeScript + Vite + Tailwind.
+- **Backend:** FastAPI + Pydantic + SQLAlchemy + Alembic.
+- **Base de datos:** PostgreSQL.
+- **RAG:** PostgreSQL + pgvector + búsqueda textual.
+- **Procesamiento asíncrono:** Celery + Redis.
+- **PDF:** PyMuPDF + ruta visual/OCR cuando corresponda.
+- **Excel:** openpyxl + reglas propias.
+- **DOCX:** python-docx.
+- **IA:** capa propia AI Provider Service con structured outputs/tool calling.
+- **Identidad:** Microsoft Entra ID / OIDC.
+- **Autorización:** RBAC en backend.
+- **Infraestructura:** Docker Compose + Nginx + CI sobre VM/servidor autorizado.
 
-La arquitectura base está seleccionada. Se fijarán versiones al implementar; infraestructura, volumen objetivo y criterios de ingeniería se completan con TI y especialistas. No bloquean iniciar el desarrollo.
+## Decisiones de arquitectura
 
-## SSO, roles y auditoría
+- PostgreSQL será la fuente de verdad.
+- MongoDB no es necesario para el MVP.
+- LibreChat no es una dependencia obligatoria.
+- MCP no forma parte del MVP.
+- LangChain, si se utiliza, queda limitado al servicio RAG.
+- El modelo no accede directamente al filesystem, PostgreSQL ni storage.
+- Los documentos originales permanecen en almacenamiento privado y fuera de Git.
+- La API/proveedor/modelo de IA exactos se definen con TI y quedan desacoplados de la lógica de negocio.
 
-- **Administrador:** usuarios, fuentes, configuración y publicación de prompts.
-- **Ingeniero:** carga según permisos, análisis y respuesta a aclaraciones.
-- **Revisor técnico/comercial:** valida hallazgos y aprueba conocimiento dentro de su ámbito.
-- **Lector/auditor:** consulta autorizada de resultados e historial.
+## Regla principal
 
-Una persona puede reunir varios roles. Se aplica segregación por expediente/área y confidencialidad, incluidos costos y márgenes. Una acotación del chat no sobrescribe una evaluación aprobada.
+La IA interpreta; el código verifica.
 
-## Roadmap basado en el expediente real
+Se resuelven de forma determinística en Python:
 
-Se revisaron siete archivos: DOCX funcional, PFD, corrida de membranas, dos proyecciones químicas visuales y dos libros Excel. Los originales se mantienen fuera de Git.
+- cálculos;
+- cantidades;
+- tolerancias;
+- fórmulas;
+- referencias Excel;
+- costeo;
+- permisos;
+- versionado.
 
-| Hito | Entregable | Criterio de salida |
-| --- | --- | --- |
-| 1. Caso real y contratos | Lectura PDF/Excel, controles iniciales y esquema de hallazgos | Evidencias por página/celda y casos revisados por experto |
-| 2. Plataforma | SSO, roles, expedientes, almacenamiento y trabajos persistentes | Cerrar navegador/reiniciar worker no pierde seguimiento; permisos verificados |
-| 3. Evaluador | Plano-costeo, cantidades, fórmulas, unidades y parámetros | Detectar errores conocidos y comprobar casos correctos |
-| 4. RAG y aclaraciones | Fuentes aprobadas, preguntas, respuestas y consolidación | Fuentes vigentes y autorizadas; nueva versión al resolver observaciones |
-| 5. Chat y prompts | LibreChat y editor versionado | Mismo corpus y permisos; historial de cambios preservado |
-| 6. Piloto operacional | Calidad, carga, tiempos, costos y respaldos | Criterios de aceptación acordados y ahorro medido |
-| Posterior | INET/SharePoint automatizados, nuevas familias y borradores de propuesta | Integraciones y plantillas aprobadas; emisión humana |
-
-La generación de propuestas técnico-comerciales queda para una fase posterior, como plantea el documento funcional. El MVP revisa diseño/costeo, formula preguntas y conserva resultados. La estimación histórica de 10–15 semanas es orientativa y se revisará al cerrar el primer hito y la disponibilidad del equipo.
-
-## Conocimiento y parámetros de agua
-
-Separar catálogo común de parámetros, valores del proyecto y reglas/rangos aprobados por aplicación. Las simulaciones recibidas pertenecen a un caso concreto; no se convierten automáticamente en estándares universales. El documento del cliente solicita elaborar y aprobar “Equipos y Criterios de Proceso VF”.
-
-Los resultados automáticos quedan auditados; solo los aprendizajes validados se incorporan como antecedentes aprobados. Cada evaluación conserva versiones de documentos, fuentes, reglas, prompts y modelo.
-
-## Documentación
-
-1. [Arquitectura objetivo](ARQUITECTURA_OBJETIVO.md): alcance vigente y decisiones propuestas.
-2. [Auditoría técnica de ECO v0.6.9 y roadmap](AUDITORIA_TECNICA_V069_Y_ROADMAP.md): hallazgos en el código de referencia y estimación condicionada.
-3. [Roadmap preliminar](ROADMAP_REVISION_PROPUESTAS.md): análisis previo a recibir el código fuente.
-4. [Primer acercamiento](PRIMER_ACERCAMIENTO.md): contexto inicial del proyecto.
-5. [Piloto documental](PILOTO_DOCUMENTAL.md): consecuencias de los formatos reales y pruebas iniciales.
-
-Este README y la actualización de la arquitectura objetivo prevalecen sobre alternativas tecnológicas históricas. Los documentos anteriores se conservan para trazabilidad.
+La IA se utiliza para interpretar planos/documentos, relacionar contexto, generar salidas estructuradas, formular preguntas y responder mediante RAG.
 
 ## Primer hito
 
-Validar con expedientes representativos el flujo **PDF del plano + costeo → discrepancias con evidencia**, incluyendo casos correctos, cantidades omitidas, paquetes y revisiones diferentes. En paralelo, definir acceso, persistencia y contratos de resultados.
+El primer desarrollo es **GOLDEN-001 / SPIKE-001**, usando un expediente real para validar:
 
-## Convenciones
+- PFD ↔ simulación;
+- PFD ↔ costeo;
+- simulación ↔ costeo;
+- costeo ↔ APU;
+- caudales;
+- cantidades y modelos de equipos;
+- membranas/portamembranas;
+- fórmulas y referencias rotas;
+- evidencia por página/celda.
 
-- Mensajes de los nuevos commits en español; ver [CONTRIBUTING.md](CONTRIBUTING.md).
-- No versionar documentos del cliente, datos operacionales ni credenciales.
-- Usar muestras sintéticas para pruebas publicadas.
+Los documentos originales del cliente no se versionan en este repositorio.
 
-## Referencias técnicas
+## Documentación
 
-- [Microsoft Entra ID y OIDC](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc).
-- [Celery con Redis](https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/redis.html).
-- [pgvector](https://github.com/pgvector/pgvector).
-- [LibreChat RAG API](https://www.librechat.ai/docs/configuration/rag_api).
+1. [Arquitectura objetivo](ARQUITECTURA_OBJETIVO.md)
+2. [Piloto documental](PILOTO_DOCUMENTAL.md)
+3. [GOLDEN-001](docs/pilot/golden-001/)
+4. [Auditoría técnica de ECO v0.6.9 y roadmap](AUDITORIA_TECNICA_V069_Y_ROADMAP.md)
+5. [Roadmap preliminar](ROADMAP_REVISION_PROPUESTAS.md)
+6. [Primer acercamiento](PRIMER_ACERCAMIENTO.md)
+
+Los documentos históricos se mantienen para trazabilidad; este README y `ARQUITECTURA_OBJETIVO.md` representan la definición vigente.
