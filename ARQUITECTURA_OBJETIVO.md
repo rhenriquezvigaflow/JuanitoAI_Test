@@ -1,132 +1,294 @@
 # Arquitectura objetivo de JuanAI
 
-Estado: base técnica seleccionada para implementar el MVP. El tenant, dimensionamiento y versiones se fijan con TI al iniciar el desarrollo.
+Estado: arquitectura objetivo actualizada para el MVP. El foco inicial es reproducir y mejorar el flujo de revisión documental de ECO con procesamiento server-side, resultados auditables y chat contextual, evitando componentes que no aportan al primer alcance.
 
-## Objetivo
+## Resumen general
 
-Procesar muchas propuestas pequeñas de tratamiento de agua con el menor error posible. JuanAI recibe diseños, planos, costeos y antecedentes; los contrasta con conocimiento autorizado, detecta inconsistencias, formula preguntas y conserva evaluaciones auditables. La generación de borradores técnico-comerciales queda para una fase posterior y siempre requiere aprobación humana.
+JuanAI será una plataforma web para revisar propuestas de ingeniería de tratamiento de agua comparando planos/PFD, simulaciones, costeos Excel y antecedentes técnicos.
+
+El administrador crea un expediente, adjunta los documentos y ejecuta el análisis. El procesamiento continúa en el servidor aunque el navegador se cierre. Los resultados quedan almacenados, versionados y disponibles para usuarios autorizados.
+
+Los usuarios normales del MVP no cargan documentos ni ejecutan análisis. Su función es consultar resultados y realizar preguntas mediante un chat contextual limitado al expediente y a las fuentes autorizadas.
+
+La IA ayuda a interpretar, extraer, relacionar y explicar información. Los cálculos, fórmulas, cantidades, reglas de negocio, permisos y validaciones críticas permanecen implementados de forma determinística en Python.
+
+## Flujo del MVP
+
+1. El administrador crea el expediente.
+2. Adjunta propuesta, PFD/plano, costeo, simulaciones y antecedentes.
+3. Ejecuta el análisis.
+4. FastAPI registra el trabajo y lo envía a procesamiento en background.
+5. Los workers procesan PDF/XLSX/DOCX, ejecutan reglas determinísticas y llaman al proveedor de IA solo cuando corresponde.
+6. PostgreSQL conserva el estado, resultados, hallazgos, evidencia y auditoría.
+7. El resultado queda disponible en una vista para usuarios autorizados.
+8. Los usuarios pueden consultar el expediente mediante un chat contextual.
+9. El administrador puede validar/corregir hallazgos y volver a ejecutar una nueva versión del análisis.
+
+## Arquitectura
+
+```mermaid
+flowchart TD
+    A[Administrador] --> UI[React + TypeScript]
+    U[Usuarios autorizados] --> UI
+
+    UI --> API[FastAPI]
+
+    API --> AUTH[Entra ID / OIDC + RBAC]
+    API --> DB[(PostgreSQL)]
+    API --> FS[Storage privado]
+    API --> Q[Celery + Redis]
+
+    Q --> W[Workers Python]
+
+    W --> DOC[Procesamiento documental]
+    DOC --> PDF[PyMuPDF / OCR]
+    DOC --> XLSX[openpyxl]
+    DOC --> DOCX[python-docx]
+
+    W --> RULES[Motor determinístico]
+    RULES --> CHECKS[Reglas / cálculos / fórmulas / cantidades]
+
+    W --> AI[AI Provider Service]
+    AI --> MODEL[Proveedor/modelo autorizado por TI]
+
+    W --> RAG[RAG controlado]
+    RAG --> V[(PostgreSQL + pgvector + búsqueda textual)]
+
+    W --> DB
+
+    API --> CHAT[Chat contextual]
+    CHAT --> RAG
+    CHAT --> DB
+```
 
 ## Componentes seleccionados
 
 | Capa | Tecnología | Responsabilidad |
 | --- | --- | --- |
-| Portal | HTML/CSS/JavaScript modular, reutilizando componentes ECO | Carga, seguimiento, resultados, preguntas, prompts y administración |
-| Identidad | Microsoft Entra ID mediante OpenID Connect | Inicio de sesión corporativo y pertenencia a grupos |
-| Autorización | FastAPI + PostgreSQL | Roles, permisos por expediente/área y políticas de acceso |
-| API | Python/FastAPI | Casos, documentos, evaluaciones, reglas, conocimiento y auditoría |
-| Procesamiento | Celery + Redis + workers Python | Trabajos largos independientes del navegador, reintentos y control de cuotas |
-| Estado durable | PostgreSQL | Casos, revisiones, trabajos, resultados, decisiones y logs funcionales |
-| Archivos | Almacenamiento privado de archivos/objetos | Originales, versiones, evidencias y exportaciones |
-| RAG | LangChain acotado al servicio de recuperación | Ingesta, división, recuperación y composición de contexto |
-| Recuperación | PostgreSQL + pgvector + búsqueda textual | Semántica, términos exactos, TAGs, modelos y filtros de vigencia/permisos |
-| Modelos | API OpenAI | Análisis visual de PDF, extracción y razonamiento con salidas estructuradas |
-| Costeo | openpyxl + reglas propias y motor compatible cuando corresponda | Fórmulas, valores, celdas, unidades, monedas y comprobaciones reproducibles |
-| Chat | LibreChat conectado a la API JuanAI | Preguntas y acotaciones sobre expedientes autorizados |
-| Datos del chat | MongoDB de LibreChat | Conversaciones y configuración propia de LibreChat |
-| Despliegue inicial | Docker Compose | Servicios aislados en infraestructura autorizada por TI |
+| Frontend | React + TypeScript + Vite + Tailwind | Expedientes, carga administrativa, seguimiento, resultados y chat contextual |
+| Backend | Python + FastAPI + Pydantic | API, autorización, expedientes, análisis, resultados y contratos estructurados |
+| Persistencia | PostgreSQL | Fuente de verdad para expedientes, versiones, trabajos, hallazgos y auditoría |
+| Recuperación | PostgreSQL + pgvector + búsqueda textual | RAG y búsqueda híbrida sobre conocimiento autorizado |
+| Procesamiento | Celery + Redis + workers Python | Trabajos largos, reintentos, idempotencia y procesamiento independiente del navegador |
+| PDF | PyMuPDF + análisis visual/OCR cuando corresponda | Texto, páginas, regiones y evidencia localizable |
+| Excel | openpyxl + reglas propias | Hojas, celdas, fórmulas, valores almacenados, nombres definidos, unidades y monedas |
+| DOCX | python-docx | Extracción estructurada de documentos Word |
+| Motor determinístico | Python | Cálculos, tolerancias, cantidades, fórmulas, referencias y reglas de negocio |
+| IA | AI Provider Service | Structured outputs, tool calling, análisis visual y razonamiento contextual |
+| Identidad | Microsoft Entra ID / OIDC | Autenticación corporativa |
+| Autorización | RBAC en FastAPI | Permisos por expediente, acción y tipo de usuario |
+| Archivos | Storage privado en infraestructura autorizada | Originales, versiones y evidencias |
+| Infraestructura | Docker Compose + Nginx + CI | Despliegue inicial en VM/servidor autorizado |
 
-LangGraph, MCP, n8n y conexión SharePoint nativa no forman parte del MVP. Pueden incorporarse si aparece una necesidad concreta. La primera entrada es carga manual; INET y SharePoint se integran después.
+## API y modelos
 
-## Flujo técnico
+JuanAI no dependerá de LibreChat como API de IA. El backend tendrá una capa propia de proveedor de IA para desacoplar la aplicación del proveedor/modelo concreto.
 
-```mermaid
-flowchart TD
-    U[Usuario corporativo] --> S[Entra ID / OIDC]
-    S --> P[Portal JuanAI]
-    P --> A[FastAPI: autorización y expedientes]
-    A --> D[(PostgreSQL)]
-    A --> F[Archivos privados]
-    A --> Q[Cola Celery / Redis]
-    Q --> W[Workers de análisis]
-    W --> X[Controles deterministas de Excel]
-    W --> O[OpenAI: PDF visual y prompts]
-    W --> R[Servicio RAG compartido]
-    R --> V[(pgvector + full-text)]
-    W --> D
-    P --> C[LibreChat]
-    S --> C
-    C --> A
-    C --> M[(MongoDB)]
+```text
+JuanAI
+   |
+   v
+AI Provider Service
+   |
+   +--> proveedor autorizado por TI
+   +--> modelo rápido/económico
+   +--> modelo de mayor capacidad
 ```
 
-El navegador inicia y observa trabajos; no ejecuta la secuencia. PostgreSQL conserva el estado canónico. Redis transporta tareas y no reemplaza la base durable. Los workers usan identificadores idempotentes, checkpoints y reconciliación después de interrupciones.
+La selección exacta de proveedor, región, retención, modelos y política de datos se define con TI. El contrato interno de JuanAI debe permitir cambiar de modelo sin modificar la lógica de negocio.
 
-## Seguridad y roles
+## RAG y contexto
 
-- **Administrador:** usuarios, fuentes, configuración y publicación de prompts.
-- **Ingeniero:** carga y análisis de expedientes autorizados; responde aclaraciones.
-- **Revisor técnico/comercial:** valida o corrige hallazgos y aprueba conocimiento dentro de su ámbito.
-- **Lector/auditor:** consulta resultados e historial sin modificar evaluaciones.
+El RAG se implementa dentro de la arquitectura de JuanAI:
 
-Los permisos se aplican a documentos, resultados, descarga, recuperación RAG, chat y exportaciones. LibreChat no consulta directamente tablas o archivos sin autorización de JuanAI. Toda acción relevante registra usuario, fecha, objeto y cambio. Los costos, márgenes y documentos de proveedores admiten clasificación de confidencialidad y segregación por proyecto o área.
+- documentos aprobados se procesan y fragmentan;
+- los fragmentos conservan documento, revisión, página/sección y permisos;
+- embeddings y metadatos se almacenan en PostgreSQL + pgvector;
+- el backend recupera solo los fragmentos pertinentes y autorizados;
+- el modelo recibe únicamente el contexto necesario para responder.
 
-## Análisis de una propuesta
+El modelo no tiene acceso directo al filesystem, base de datos ni almacenamiento privado.
 
-1. Crear expediente, seleccionar tipo de propuesta y adjuntar archivos.
-2. Inventariar documentos, calcular huellas y registrar revisiones.
-3. Validar formatos y cobertura de lectura; separar ilegible, faltante y vacío.
-4. Extraer Excel preservando hoja, celda, fórmula, valor guardado, unidad y moneda.
-5. Analizar visualmente planos y reportes PDF con evidencia de página/región.
-6. Consultar conocimiento vigente y autorizado mediante recuperación híbrida.
-7. Ejecutar reglas deterministas y prompts pertinentes al tipo de propuesta.
-8. Consolidar errores, discrepancias probables, mejoras y preguntas.
-9. Registrar respuestas y ejecutar solamente dependencias afectadas.
-10. Publicar una nueva versión del resultado sin borrar evaluaciones anteriores.
+LangChain puede utilizarse de forma acotada dentro del servicio de recuperación si aporta valor, pero no es un requisito estructural del MVP.
 
-Los controles aritméticos y referencias de Excel se resuelven en código. El LLM interpreta planos, correspondencias y contexto. Los hallazgos de alto impacto o baja certeza requieren revisión dirigida.
+## MCP
 
-## Conocimiento y aprendizaje
+MCP no forma parte del MVP.
 
-La base distingue:
+JuanAI no necesita que el modelo se conecte directamente a servidores externos o herramientas remotas para resolver el primer alcance. El acceso a documentos, reglas, resultados y conocimiento se realiza mediante servicios internos controlados por FastAPI, RAG y funciones explícitas del backend.
 
-- **Biblioteca aprobada:** criterios internos, manuales, listas y documentación vigente.
-- **Expediente:** archivos y resultados de una oportunidad concreta.
-- **Históricos validados:** propuestas, correcciones y lecciones aprobadas para reutilización.
-- **Casos negativos:** errores conocidos acompañados de su corrección.
+Una eventual adopción de MCP deberá justificarse por una integración concreta y pasar revisión de seguridad.
 
-Cada fuente conserva propietario, vigencia, revisión, fabricante/modelo, confidencialidad y ámbito. Una propuesta ganada o una conclusión automática no se convierte por sí sola en regla.
+## Chat contextual
 
-Para parámetros de agua se separan el catálogo común, los valores del proyecto y los rangos aprobados por aplicación. Las simulaciones del expediente real son escenarios concretos. El documento “Equipos y Criterios de Proceso VF” debe elaborarse y aprobarse con especialistas antes de automatizar conclusiones técnicas que dependan de sus límites.
+El chat será una función de JuanAI, no necesariamente una instalación de LibreChat.
 
-## Prompts y resultados
+El chat:
 
-Los prompts mantienen la lógica probada en ECO: tareas delimitadas, instrucciones expertas y contratos JSON protegidos. La interfaz permite editar criterios e instrucciones; publicar una versión exige autor, fecha y pruebas. Una evaluación registra documentos, reglas, prompt y modelo utilizados.
+- solo consulta expedientes a los que el usuario tiene acceso;
+- utiliza resultados ya generados y RAG autorizado;
+- puede responder preguntas sobre hallazgos y evidencia;
+- no carga documentos;
+- no ejecuta nuevos análisis;
+- no modifica ni aprueba hallazgos;
+- no accede directamente al storage o PostgreSQL.
 
-Familias iniciales:
+MongoDB no es necesario para el MVP. PostgreSQL será la fuente de verdad también para sesiones/metadatos de conversación si se requiere persistencia del chat.
 
-- Clasificación, revisiones y completitud documental.
-- Extracción de equipos, parámetros y etapas.
-- Lectura visual de plano.
-- Conciliación plano, corrida, proyección química y costeo.
-- Coherencia técnica, económica y comercial.
-- Recuperación de antecedentes aprobados.
-- Preguntas, respuestas e impacto.
-- Consolidación de resultados y chat sustentado.
+## Roles del MVP
 
-Cada hallazgo incluye tipo de control, valores comparados, unidad, regla/prompt, fuentes, severidad, certeza, cobertura, acción y decisión del revisor. El chat puede crear una observación; no sobrescribe el análisis aprobado.
+### Administrador
 
-## Roadmap
+En el MVP puede:
 
-| Fase | Alcance | Salida verificable |
+- crear expedientes;
+- cargar y reemplazar documentos;
+- iniciar análisis;
+- revisar estado de procesamiento;
+- validar o corregir hallazgos;
+- ejecutar una nueva versión del análisis;
+- administrar fuentes y configuración permitida.
+
+### Usuario autorizado
+
+En el MVP puede:
+
+- consultar expedientes autorizados;
+- ver resultados y evidencia;
+- consultar mediante chat contextual;
+- descargar resultados cuando tenga permiso.
+
+No puede cargar documentos, iniciar análisis ni modificar hallazgos.
+
+## Procesamiento documental
+
+Cada documento debe registrarse antes del análisis con hash, revisión, fecha, tipo, confidencialidad y cobertura de extracción.
+
+Para Excel se debe conservar:
+
+- libro y revisión;
+- hoja y celda/rango;
+- fórmula;
+- valor almacenado;
+- unidad y moneda;
+- dependencias relevantes.
+
+Para PDF/plano se debe conservar:
+
+- documento y revisión;
+- página;
+- región/coordenadas;
+- etiqueta o fragmento visible;
+- evidencia verificable.
+
+La ausencia de texto extraíble no significa que el documento esté vacío. Los PDF visuales deben pasar a análisis visual/OCR cuando corresponda.
+
+## Reglas determinísticas vs IA
+
+Se implementan en código:
+
+- sumas y subtotales;
+- cantidades;
+- unidades y conversiones;
+- tolerancias;
+- referencias Excel y #REF!;
+- comprobación de fórmulas;
+- reglas de costeo;
+- estados y permisos;
+- versionado;
+- decisiones administrativas.
+
+La IA se utiliza para:
+
+- interpretar planos;
+- extraer información no estructurada;
+- relacionar nomenclaturas;
+- clasificar contexto;
+- explicar discrepancias;
+- generar preguntas;
+- producir respuestas estructuradas;
+- responder en el chat utilizando contexto autorizado.
+
+## Seguridad
+
+- SSO mediante Entra ID/OIDC.
+- RBAC aplicado en FastAPI.
+- Documentos originales fuera de Git.
+- Storage privado en infraestructura autorizada.
+- Cada consulta RAG debe respetar permisos del expediente.
+- Cada evaluación conserva documentos, reglas, modelo/prompt y versión utilizados.
+- El modelo no recibe documentos completos por defecto; recibe el contexto necesario para la tarea.
+- No se incorporan MCP servers, conexiones SharePoint directas ni integraciones externas en el MVP salvo decisión posterior de TI.
+
+## Persistencia
+
+PostgreSQL es la fuente de verdad para:
+
+- usuarios y roles;
+- expedientes;
+- documentos y versiones;
+- trabajos;
+- resultados;
+- hallazgos;
+- evidencias;
+- decisiones del administrador;
+- auditoría;
+- metadata RAG;
+- embeddings mediante pgvector;
+- chat contextual si se decide persistir conversaciones.
+
+Redis es infraestructura de cola/cache, no almacenamiento durable del negocio.
+
+## Roadmap MVP
+
+| Fase | Alcance | Salida |
 | --- | --- | --- |
-| 1. Caso real | Lectores PDF/XLSX, esquema de resultados y controles iniciales | Referencias rotas, vacíos y evidencia por página/celda |
-| 2. Plataforma | SSO, roles, expedientes, archivos y cola durable | Acceso segregado y recuperación tras cierre/reinicio |
-| 3. Evaluador | Plano-costeo, cantidades, fórmulas, unidades y parámetros | Casos correctos y errores conocidos validados por experto |
-| 4. RAG y aclaraciones | Biblioteca, recuperación híbrida y ciclo pregunta-respuesta | Fuentes vigentes, permisos y reproceso de dependencias |
-| 5. Chat y prompts | LibreChat y editor versionado | Mismo corpus/permisos; auditoría de cambios |
-| 6. Piloto operacional | Carga, respaldo, costo, calidad y ahorro | Umbrales aceptados por negocio |
-| Posterior | INET/SharePoint, más familias y borradores | Integraciones y plantillas aprobadas |
+| 1. GOLDEN-001 / Spike | PDF/XLSX, contratos de salida y controles C01-C11 | Comparaciones reproducibles con evidencia |
+| 2. Core backend | Expedientes, storage, PostgreSQL y jobs persistentes | Análisis independiente del navegador |
+| 3. Evaluador | Reglas plano-costeo-simulación y análisis IA | Hallazgos versionados y auditables |
+| 4. Frontend MVP | Flujo administrador + consulta de usuarios | Crear/ejecutar vs consultar claramente separado |
+| 5. RAG | Fuentes autorizadas + pgvector + búsqueda híbrida | Contexto recuperable con permisos |
+| 6. Chat contextual | Preguntas sobre expediente y resultados | Chat sin capacidad administrativa |
+| 7. Seguridad/operación | Entra ID, RBAC, backup, logging y métricas | Piloto operacional |
+| Posterior | SharePoint/INET, MCP justificado, nuevas familias, automatizaciones adicionales | Evolución según necesidad |
 
-La estimación histórica de 10–15 semanas es orientativa. Se recalibra al finalizar la fase 1, con equipo, accesos, volumen y disponibilidad del experto definidos.
+## Fuera del MVP
 
-## Criterios de éxito
+- generación/emisión automática de propuestas;
+- aprobación autónoma por IA;
+- carga de documentos por usuarios normales;
+- ejecución de análisis por usuarios normales;
+- MCP;
+- MongoDB como dependencia obligatoria;
+- LibreChat como dependencia obligatoria;
+- LangGraph;
+- n8n;
+- SharePoint/INET automáticos.
 
-- Precisión y cobertura por tipo de control, no una nota global aislada.
-- Errores reales detectados, falsos positivos y errores omitidos.
-- Evidencias correctas y fuentes vigentes.
-- Tiempo humano neto y costo por propuesta.
-- Recuperación tras fallas y ausencia de ejecuciones duplicadas evitables.
-- Cumplimiento de permisos en portal, chat, RAG y descargas.
-- Reducción de reproceso y correcciones posteriores.
+## Primer hito
 
-El expediente revisado y sus consecuencias están en [PILOTO_DOCUMENTAL.md](PILOTO_DOCUMENTAL.md). La evidencia del sistema ECO está en [AUDITORIA_TECNICA_V069_Y_ROADMAP.md](AUDITORIA_TECNICA_V069_Y_ROADMAP.md).
+El primer hito sigue siendo GOLDEN-001 / SPIKE-001:
+
+```text
+PFD
+ + Simulación
+ + Costeo XLSX
+ + APU XLSX
+        |
+        v
+Extracción y normalización
+        |
+        v
+Reglas determinísticas
+        |
+        +--> caudales
+        +--> equipos
+        +--> membranas
+        +--> fórmulas
+        +--> referencias rotas
+        |
+        v
+Hallazgos + evidencia
+```
+
+Cuando este flujo sea reproducible y validado, se construyen la plataforma, persistencia, RAG y chat alrededor de él.
